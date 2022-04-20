@@ -4,9 +4,9 @@ using System.Net;
 using System.Net.Sockets;
 
 Console.WriteLine("Hello, World!");
-
-
+var debugMode = true;
 Helpers.LoadLogFile();
+Packet.SignLength = SignDigit.Short;
 Task.Run(() => {
 
     TcpListener listener = new TcpListener(IPAddress.Any, 25565);
@@ -17,28 +17,10 @@ Task.Run(() => {
         var connection = new TcpConnection<PacketIdentifier>(connectionId, client);
         connection.OnConnected += (s, e) => {
             Console.WriteLine($@"Client connected");
-
-            Task.Run(() =>
-            {
-                int x = 0; int y = 0; int z = 0;
-                while (true)
-                {
-                    y++;
-
-                    var movePacket = new WritePacket<PacketIdentifier>(PacketIdentifier.Position);
-                    movePacket.WriteInt(x);
-                    movePacket.WriteInt(y);
-                    movePacket.WriteInt(z);
-                    e.WritePacket(movePacket);
-                    Thread.Sleep(150);
-                }
-
-            });
-
-
-            //var packet = new WritePacket<PacketIdentifier>(PacketIdentifier.Welcome);
-            //packet.WriteString($@"Welcome to the server");
-            //e.WritePacket(packet);
+            e.WritePacket(
+                new WritePacket<PacketIdentifier>(PacketIdentifier.Welcome)
+                    .WriteUShort((ushort)e.ConnectionId)
+                );
         };
         Task.Run(async () => 
         await connection.ConnectAsync());
@@ -50,26 +32,41 @@ Task.Run(() => {
     byte[] bytes = new byte[255];
 
     var connection = new TcpConnection<PacketIdentifier>(0,"127.0.0.1",25565);
+    Player player = new Player();
     connection.PacketReceived += (s, e) => {
+        //Console.Clear();
         Console.Write($@"Packet Received({e.PacketId})");
-        if(e.PacketId == PacketIdentifier.Position)
+        ConsoleColor baseColor = Console.ForegroundColor;
+        if (e.PacketId == PacketIdentifier.Position)
         {
             int x, y, z;
             x = e.Packet.ReadInt();
             y = e.Packet.ReadInt();
             z = e.Packet.ReadInt();
+            Console.ForegroundColor = ConsoleColor.Green;
             Console.Write($"({x},{y},{z})\n");
         }
-        //else if ( e.PacketId == PacketIdentifier.Welcome)
-        //{
-        //    string message = e.Packet.ReadString();
-        //    Console.Write($"\"{message}\"\n");
-        //}
+        else if (e.PacketId == PacketIdentifier.Welcome)
+        {
+            int connectionId = e.Packet.ReadUShort();
+            player.PlayerId = connectionId;
+            Console.WriteLine($"Connection Established with PlayerId {connectionId}\n");
+        }
 
         else
         {
-            Console.Write($"RAW({Helpers.ConvertPacketEventToTextData(e)})\n");
+            Console.ForegroundColor = ConsoleColor.Red;
+
+            Console.Write($"RAW({Helpers.ConvertPacketEventToTextData(e, true)})\n");
         }
+        if (debugMode)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+
+            Console.Write($"    ({Helpers.ConvertPacketEventToTextData(e, true)})\n");
+
+        }
+        Console.ForegroundColor = baseColor;
     };
     Task.Run(async () =>
        await connection.ConnectAsync());
@@ -95,3 +92,6 @@ public enum PacketIdentifier
     Position=2
 }
 
+public class Player{
+    public int PlayerId { get; set; }
+}
